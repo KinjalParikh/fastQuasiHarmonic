@@ -30,5 +30,6 @@ the progress of the optimization will be displayed on the terminal
 
 
 **Future work**
+\
 In the current implementation, each control handle has 1 vertex. I wish to extend it so that for each control handle, 
 the number of associated vertices can be varied.
