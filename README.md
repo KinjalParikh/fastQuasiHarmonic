@@ -21,7 +21,7 @@ Once all control points have been selected,
 the progress of the optimization will be displayed on the terminal
 
 
-![screenshot of result](sc.png)
+![screenshot of result](bunny_sc.png)
 
 **Implementation**
 1. Initialize theta, parametrization of the anisotropic tensor field A
@@ -30,6 +30,5 @@ the progress of the optimization will be displayed on the terminal
 
 
 **Future work**
-1. This implementation uses dense matrices. I plan to use sparse matrices to increase the speed
-2. In the current implementation, each control handle has 1 vertex. I wish to extend it so that for each control handle, 
+In the current implementation, each control handle has 1 vertex. I wish to extend it so that for each control handle, 
 the number of associated vertices can be varied.

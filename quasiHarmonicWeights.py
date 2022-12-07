@@ -1,7 +1,7 @@
 import igl
 import numpy as np
 import utility
-import scipy
+import scipy.sparse as sp
 import sksparse.cholmod as sc
 from autograd import jacobian
 
@@ -20,16 +20,12 @@ class QHWeights():
 
         self.G = igl.grad(vertices, faces)
         self.L = self.compute_L()
-        self.M = igl.massmatrix(vertices, faces)
-        Minv = np.eye(self.nvertices)
-        np.fill_diagonal(Minv, np.power(np.diag(self.M.todense()), -1))
-        self.Minv = Minv
 
-        self.B = np.eye(len(control_points_i), len(control_points_i))  # boundary condition matrix
+        self.B = sp.eye(len(control_points_i), len(control_points_i))  # boundary condition matrix
         self.R = self.build_R()                                        # binary selection matrix for control points
         self.S = self.build_S()                                        # binary selection matrix for non control points
 
-        self.Q = np.matmul(self.L, np.matmul(self.Minv, self.L))       # quadratic form measuring smoothness of weights
+        self.Q = self.compute_Q()                                      # quadratic form measuring smoothness of weights
 
         # Symbolic pre-factorization of S'G'AGS
         mat = self.get_mat_for_symbolic_fact()
@@ -41,27 +37,31 @@ class QHWeights():
         A = utility.unflattenA(flat_a, self.nfaces)
 
         # numerical factorization using the symbolic pre-factorization
-        mat = np.matmul(self.S.transpose(), np.matmul(self.G.transpose().todense(), np.matmul(A, self.G.todense())))
-        self.sym_factor.cholesky_inplace(scipy.sparse.csc_matrix(np.matmul(mat, self.S)))
+        mat = self.S.transpose() @ self.G.transpose() @ A @ self.G
+        self.sym_factor.cholesky_inplace(sp.csc_matrix(mat @ self.S))
         # back substitution
-        U = - self.sym_factor(np.matmul(mat, np.matmul(self.R, self.B)))
+        U = - self.sym_factor(sp.csc_matrix(mat @ self.R @ self.B))
         return U
 
     def gradient(self, theta, U):
         dEda = np.zeros((1, 6 * self.nfaces), dtype="float32")
 
         for ind in range(self.ncp):
-            dEdU = np.matmul(U[:, ind].transpose(), np.matmul(self.S.transpose(), np.matmul(self.Q, self.S))) + \
-                   np.matmul(self.B[:, ind].transpose(), np.matmul(self.R.transpose(),np.matmul(self.Q, self.S)))
+            dEdU = U[:, ind].transpose() @ (self.S.transpose() @ self.Q @ self.S).toarray() + \
+                   (self.B.getcol(ind).transpose() @ self.R.transpose() @ self.Q @ self.S).toarray()
 
-            bvec = np.asarray(np.add(np.matmul(self.G.todense(), np.matmul(self.S, U[:, ind])),
-                                      np.matmul(self.G.todense(), np.matmul(self.R, self.B[:, ind])
-                                                .reshape(self.R.shape[0], 1)))).reshape(-1)
-            rhs = np.matmul(self.S.transpose(), np.matmul(self.G.transpose().todense(),
-                                                                        utility.sp3d(bvec[:self.nfaces],
-                                                                             bvec[self.nfaces:2 * self.nfaces],
-                                                                             bvec[2 * self.nfaces: 3 * self.nfaces], self.nfaces)))
-            dUda = - self.sym_factor(rhs)
+            bvec = np.asarray(
+                np.add(
+                    (self.G @ self.S).toarray() @ U[:, ind],
+                    (self.G @ self.R @ self.B.getcol(ind)).toarray()
+                )
+            ).reshape(-1)
+
+            rhs = self.S.transpose() @ self.G.transpose() @ utility.sp3d(bvec[:self.nfaces],
+                                                                         bvec[self.nfaces:2 * self.nfaces],
+                                                                         bvec[2 * self.nfaces: 3 * self.nfaces],
+                                                                         self.nfaces)
+            dUda = - self.sym_factor(sp.csc_matrix(rhs)).toarray()
             dEda = np.add(dEda, np.matmul(dEdU, dUda))
 
         fdadtheta = jacobian(utility.ftheta_to_flat_a)
@@ -77,13 +77,20 @@ class QHWeights():
     def compute_L(self):
         Mf = np.diag(igl.doublearea(self.vertices, self.faces) / 2.0)
         Mfrep = np.kron(np.eye(3, dtype=float), Mf)
-        return np.matmul(self.G.transpose().todense(), np.matmul(Mfrep, self.G.todense()))
+        Mfrep_sp = sp.dia_matrix(Mfrep)
+        return self.G.transpose() @ Mfrep_sp @ self.G
+
+    def compute_Q(self):
+        M = igl.massmatrix(self.vertices, self.faces)
+        Minv = sp.lil_matrix((self.nvertices, self.nvertices))
+        Minv.setdiag(np.power(np.diag(M.todense()), -1))
+        return self.L @ Minv @ self.L
 
     def build_R(self):
         '''
         :return: binary selection matrix such that selects rows for the vertices representing the j-th control handle
         '''
-        R = np.zeros((self.nvertices, self.ncp) , dtype=int)
+        R = sp.lil_matrix((self.vertices.shape[0], self.ncp), dtype=int)
         for ind in range(self.ncp):
             R[self.cp_i[ind], -(ind+1)] = 1
         return R
@@ -93,7 +100,7 @@ class QHWeights():
         :return: binary selection matrix for non control handle
         '''
         num_cols = self.nvertices - self.ncp
-        S = np.zeros((self.nvertices, num_cols), dtype=int)
+        S = sp.lil_matrix((self.nvertices, num_cols), dtype=int)
         noncind = 0
         for ind in range(num_cols):
             while noncind in self.cp_i:
@@ -112,12 +119,11 @@ class QHWeights():
                            area
                            ])
         A = utility.unflattenA(flat_a, self.nfaces)
-        mat = np.matmul(self.S.transpose(),
-                        np.matmul(self.G.transpose().todense(), np.matmul(A, np.matmul(self.G.todense(), self.S))))
-        return scipy.sparse.csc_matrix(mat)
+        mat = self.S.transpose() @ self.G.transpose() @ A @ self.G @ self.S
+        return sp.csc_matrix(mat)
 
     def getWeights(self, U):
-        W = np.matmul(self.S, U) + np.matmul(self.R, self.B)
+        W = self.S.todense() @ U + (self.R @ self.B).toarray()
         temp = np.copy(W)
         mask = temp == 0
         temp[mask] = 1

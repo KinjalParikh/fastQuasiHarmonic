@@ -7,7 +7,7 @@ import numpy as np
 
 
 def main():
-    mesh_file = "./data/decimated-knight.off" if len(sys.argv) == 1 else sys.argv[1]
+    mesh_file = "./data/elephant.obj" if len(sys.argv) == 1 else sys.argv[1]
     vertices, faces = igl.read_triangle_mesh(mesh_file)
 
     ps.init()
@@ -40,12 +40,12 @@ def main():
             selected = ps.get_selection()
             if selected[0] != '' and selected[1] < len(vertices):
                 control_points_i.append(selected[1])
+                point_cloud = ps.register_point_cloud("my points", vertices[control_points_i],
+                                                      radius=0.005, color=[0, 0, 0], point_render_mode='sphere')
                 ps.set_selection('', 0)
             psim.TextUnformatted("{} of {} custom points selected".format(len(control_points_i), ncp))
             psim.Separator()
             if len(control_points_i) == ncp:
-                point_cloud = ps.register_point_cloud("my points", vertices[control_points_i],
-                                        radius=0.005, color=[0, 0, 0], point_render_mode='sphere')
                 colours[::] = optimizeWeights.runOptimization(vertices, faces, control_points_i)
                 ps_mesh.add_color_quantity("quasi harmonics colors", colours, enabled=True)
                 flag = False

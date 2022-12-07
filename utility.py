@@ -2,6 +2,7 @@ import numpy as np
 import igl
 import autograd.numpy as anp
 import colorsys
+import scipy.sparse as sp
 
 
 def sp3d(b0, b1, b2, f):
@@ -14,17 +15,14 @@ def sp3d(b0, b1, b2, f):
     :param f: number of faces
     :return: SP(b) where b = transpose([b0 b1 b2])
     '''
-    dib0 = np.diag(b0)
-    dib1 = np.diag(b1)
-    dib2 = np.diag(b2)
+    dib0 = sp.diags(b0)
+    dib1 = sp.diags(b1)
+    dib2 = sp.diags(b2)
 
-    spb = np.block([
-        [dib0, dib1, np.zeros((f, f), dtype="float32"), dib2, np.zeros((f, f), dtype="float32"),
-         np.zeros((f, f), dtype="float32")],
-        [np.zeros((f, f), dtype="float32"), dib0, dib1, np.zeros((f, f), dtype="float32"), dib2,
-         np.zeros((f, f), dtype="float32")],
-        [np.zeros((f, f), dtype="float32"), np.zeros((f, f), dtype="float32"), np.zeros((f, f), dtype="float32"), dib0,
-         dib1, dib2]
+    spb = sp.bmat([
+        [dib0, dib1, sp.lil_matrix((f, f)) , dib2, sp.lil_matrix((f, f)), sp.lil_matrix((f, f))],
+        [sp.lil_matrix((f, f)), dib0, dib1, sp.lil_matrix((f, f)), dib2, sp.lil_matrix((f, f))],
+        [sp.lil_matrix((f, f)), sp.lil_matrix((f, f)), sp.lil_matrix((f, f)), dib0, dib1, dib2]
     ])
     return spb
 
@@ -51,10 +49,10 @@ def init_theta(faces, vertices):
 
 
 def unflattenA(flat_a, f):
-    A = np.block([
-        [np.diag(flat_a[:f]), np.diag(flat_a[f:2*f]), np.diag(flat_a[3*f: 4*f])],
-        [np.diag(flat_a[f:2*f]), np.diag(flat_a[2*f:3*f]), np.diag(flat_a[4*f:5*f])],
-        [np.diag(flat_a[3*f:4*f]), np.diag(flat_a[4*f:5*f]), np.diag(flat_a[5*f:6*f])]
+    A = sp.bmat([
+        [sp.diags(flat_a[:f]), sp.diags(flat_a[f:2 * f]), sp.diags(flat_a[3 * f: 4 * f])],
+        [sp.diags(flat_a[f:2 * f]), sp.diags(flat_a[2 * f:3 * f]), sp.diags(flat_a[4 * f:5 * f])],
+        [sp.diags(flat_a[3 * f:4 * f]), sp.diags(flat_a[4 * f:5 * f]), sp.diags(flat_a[5 * f:6 * f])]
     ])
     return A
 
