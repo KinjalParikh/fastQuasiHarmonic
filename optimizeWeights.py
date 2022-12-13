@@ -15,8 +15,14 @@ def optimizeWeights(vertices, faces, cp_i):
     qhw = QHWeights(vertices, faces, cp_i)
     a_model = Adam(faces.shape[0], alpha=0.1)
     theta = utility.init_theta(faces, vertices)
+    num_iter = 10
 
-    for epoch in tqdm(range(10)):
+    ci_str = ", ".join(str(ci) for ci in cp_i) + "\n"
+    with open('wts.txt', 'a') as f:
+        f.write(ci_str)
+        f.write(str(num_iter)+"\n")
+
+    for epoch in tqdm(range(num_iter)):
         U_pred = qhw.predWeights(theta)
         grad = qhw.gradient(theta, U_pred)
         delta = a_model.step(np.squeeze(grad), epoch).transpose()
@@ -30,4 +36,11 @@ def optimizeWeights(vertices, faces, cp_i):
             # learning rate halved every T iterations (Section 6.1 of paper)
             a_model.alpha = a_model.alpha / 2
 
-    return qhw.getWeights(U_pred)
+        wts = qhw.getWeights(U_pred)
+
+        # make sure that you have deleted the wts.txt from any previous runs of the code
+        # Uncomment next 2 lines only if you want to visualize the optimization
+        with open('wts.txt', 'ab') as f:
+            np.savetxt(f, wts)
+
+    return wts

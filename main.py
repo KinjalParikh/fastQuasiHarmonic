@@ -9,6 +9,8 @@ import numpy as np
 def main():
     mesh_file = "./data/elephant.obj" if len(sys.argv) == 1 else sys.argv[1]
     vertices, faces = igl.read_triangle_mesh(mesh_file)
+    with open('wts.txt', 'w') as f:
+        f.write(mesh_file+"\n")
 
     ps.init()
     ps_mesh = ps.register_surface_mesh("my mesh", vertices, faces)

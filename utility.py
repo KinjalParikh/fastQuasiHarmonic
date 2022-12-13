@@ -115,6 +115,6 @@ def get_Colours(ncp):
     :param ncp: number of colours
     :return: #ncp x 3 - RGB colours
     '''
-    HSV = [[x / ncp, 0.5, 0.5] for x in range(ncp)]
+    HSV = [[x / ncp, 1, 0.75] for x in range(ncp)]
     RGB = list(map(lambda x: list(colorsys.hsv_to_rgb(*x)), HSV))
     return RGB
